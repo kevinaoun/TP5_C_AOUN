@@ -1,0 +1,258 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "header.h"
+
+/******************************************************************************************/
+
+// Retourne le minimum entre a et b
+int min(int a, int b) {
+    if (a>b) { return b; }
+    else { return a; }
+}
+
+// Retourne le maximum entre a et b
+int max(int a, int b) {
+    if (a>b) { return a; }
+    else { return b; }
+}
+
+/******************************************************************************************/
+
+// Alloue la mémoire pour un tableau 2D row*col (une matrice)
+void newmat(image* mat) {
+    int **tabl = (int**)malloc((mat->row)*sizeof(int*));
+    for (int i=0 ; i<(mat->row) ; i++) {
+        tabl[i] = (int*)malloc((mat->col)*sizeof(int));
+    }
+    mat->tab = tabl;
+}
+
+/******************************************************************************************/
+
+// Ouvre un fichier pgm et remplie dans une variable "image" ses informations
+void loadImage(const char* pgm, image *ima) {
+    
+    FILE *f = fopen(pgm,"r");
+
+    if (pgm == NULL){
+        printf("Le fichier saisi n'existe pas, ERREUR\n");
+        return ;
+    }
+
+    fscanf(f,"%s",ima->format);
+    // printf("format de l'image :\t%s\n", ima->format);
+    fscanf(f,"%d %d",&(ima->row),&(ima->col));
+    // printf("taille (row*col)  :\t%d*%d\n", ima->row, ima->col);
+    fscanf(f,"%d",&(ima->max));
+    // printf("valeur maximale   :\t%d\n", ima->max);
+
+    // Remplissage de tab le tableau 2D qui prend row*col valeurs
+    newmat(ima);     // ima->tab est alloué
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            fscanf(f, "%d", &(ima->tab[i][j]));
+        }
+    }
+
+    fclose(f);
+}
+
+/******************************************************************************************/
+
+// Enregistre une image au format pgm dans un nouveau fichier pgm
+void recordImage(const char* pgm, image *ima) {
+
+    FILE *f = fopen(pgm,"w+");  // S'il n'existe pas, créé un fichier pgm
+
+    fprintf(f, "%s\n", ima->format);
+    fprintf(f, "%d %d\n", ima->row, ima->col);
+    fprintf(f, "%d\n", ima->max);
+
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            fprintf(f, "%d ", ima->tab[i][j]);
+        }
+        fprintf(f, "\n");
+    }
+
+    fclose(f);
+}
+
+/******************************************************************************************/
+
+// Modifie l'image "ima" en niveau de gris selon le "seuil"
+void binarisation(int seuil, image *ima) {
+
+    if ((seuil > 255) || (seuil < 0)) {
+        printf("Le seuil saisi n'est pas dans la plage possible : 0<=seuil<=255\n");
+        return ;
+    }
+
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            if ((ima->tab[i][j]) >= seuil) ima->tab[i][j] = 255;
+            else ima->tab[i][j] = 0;
+        }
+    }
+
+}
+
+/******************************************************************************************/
+
+// Inverse les couleurs de l'image "ima" précédemment binarisée
+void inverse(image *ima) {
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            if ((ima->tab[i][j]) == 255) (ima->tab[i][j]) = 0;
+            else (ima->tab[i][j]) = 255;
+        }
+    }
+}
+
+/******************************************************************************************/
+
+// Modifie chaque pixel courant en la valeur du plus petit pixel autour
+void erosion(image *ima) {
+
+    // Définission d'une variable temporaire qui stocke la modification
+    image temp;
+    temp.row = ima->row;
+    temp.col = ima->col;
+    temp.max = ima->max;
+    newmat(&temp);
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            temp.tab[i][j] = ima->tab[i][j];
+        }
+    }
+
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+
+            // Disjonction de tous les cas possibles :
+            if ( i == 0 ) {
+                if ( j == 0 ) {
+                    // Première ligne, première colonne, Voisins : Courant Droite Bas
+                    ima->tab[i][j] = min((temp.tab[i][j]),(min((temp.tab[i+1][j]),(temp.tab[i][j+1]))));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    // Première ligne dernière colonne, Voisins : Courant Gauche Bas
+                    ima->tab[i][j] = min((temp.tab[i][j]),(min((temp.tab[i+1][j]),(temp.tab[i][j-1]))));
+                }
+                else {
+                    // Première ligne autre, Voisins : Courant Gauche Droite Bas
+                    ima->tab[i][j] = min(min((temp.tab[i][j]),(temp.tab[i][j-1])),min((temp.tab[i+1][j]),(temp.tab[i][j+1])));
+                }
+            }
+
+            else if ( i == ((ima->row)-1) ) {
+                if ( j == 0 ) {
+                    // Dernière ligne première colonne, Voisins : Courant Droite Haut
+                    ima->tab[i][j] = min((temp.tab[i][j]),(min((temp.tab[i-1][j]),(temp.tab[i][j+1]))));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    // Dernière ligne dernière colonne, Voisins : Courant Gauche Haut
+                    ima->tab[i][j] = min((temp.tab[i][j]),(min((temp.tab[i-1][j]),(temp.tab[i][j-1]))));
+                }
+                else {
+                    // Dernière ligne autre, Voisins : Courant Gauche Droite Haut
+                    ima->tab[i][j] = min(min((temp.tab[i][j]),(temp.tab[i][j-1])),min((temp.tab[i-1][j]),(temp.tab[i][j+1])));
+                }
+            }
+
+            else if ( (i>0) && (i<((ima->row)-1)) ) {
+                if ( j == 0 ) {
+                    // Première colonne autre, Voisins : Courant Droite Haut Bas
+                    ima->tab[i][j] = min(min((temp.tab[i][j]),(temp.tab[i][j+1])),min((temp.tab[i-1][j]),(temp.tab[i+1][j])));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    // Dernière colonne autre, Voisins : Courant Gauche Haut Bas
+                    ima->tab[i][j] = min(min((temp.tab[i][j]),(temp.tab[i][j-1])),min((temp.tab[i-1][j]),(temp.tab[i+1][j])));
+                }
+                else {
+                    // Toutes les valeurs dans le tableau, Voisins : Courant Gauche Droite Haut Bas
+                    ima->tab[i][j] = min((temp.tab[i][j]),min(min((temp.tab[i][j-1]),(temp.tab[i][j+1])),min((temp.tab[i-1][j]),(temp.tab[i+1][j]))));
+                }
+            }
+
+        }
+    }
+
+    freemat(&temp);
+}
+
+/******************************************************************************************/
+
+// Modifie chaque pixel courant en la valeur du plus grand pixel autour
+void dilatation(image *ima) {
+
+    // cf. erosion() pour les commentaires
+    // Même fonction avec max() à la place de min()
+
+    image temp;
+    temp.row = ima->row;
+    temp.col = ima->col;
+    temp.max = ima->max;
+    newmat(&temp);
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+            temp.tab[i][j] = ima->tab[i][j];
+        }
+    }
+
+    for (int i=0; i<(ima->row) ; i++) {
+        for (int j=0; j<(ima->col) ; j++) {
+
+            if ( i == 0 ) {
+                if ( j == 0 ) {
+                    ima->tab[i][j] = max((temp.tab[i][j]),(max((temp.tab[i+1][j]),(temp.tab[i][j+1]))));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    ima->tab[i][j] = max((temp.tab[i][j]),(max((temp.tab[i+1][j]),(temp.tab[i][j-1]))));
+                }
+                else {
+                    ima->tab[i][j] = max(max((temp.tab[i][j]),(temp.tab[i][j-1])),max((temp.tab[i+1][j]),(temp.tab[i][j+1])));
+                }
+            }
+
+            else if ( i == ((ima->row)-1) ) {
+                if ( j == 0 ) {
+                    ima->tab[i][j] = max((temp.tab[i][j]),(max((temp.tab[i-1][j]),(temp.tab[i][j+1]))));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    ima->tab[i][j] = max((temp.tab[i][j]),(max((temp.tab[i-1][j]),(temp.tab[i][j-1]))));
+                }
+                else {
+                    ima->tab[i][j] = max(max((temp.tab[i][j]),(temp.tab[i][j-1])),max((temp.tab[i-1][j]),(temp.tab[i][j+1])));
+                }
+            }
+
+            else if ( (i>0) && (i<((ima->row)-1)) ) {
+                if ( j == 0 ) {
+                    ima->tab[i][j] = max(max((temp.tab[i][j]),(temp.tab[i][j+1])),max((temp.tab[i-1][j]),(temp.tab[i+1][j])));
+                }
+                else if ( j == ((ima->col)-1) ) {
+                    ima->tab[i][j] = max(max((temp.tab[i][j]),(temp.tab[i][j-1])),max((temp.tab[i-1][j]),(temp.tab[i+1][j])));
+                }
+                else {
+                    ima->tab[i][j] = max((temp.tab[i][j]),max(max((temp.tab[i][j-1]),(temp.tab[i][j+1])),max((temp.tab[i-1][j]),(temp.tab[i+1][j]))));
+                }
+            }
+
+        }
+    }
+
+    freemat(&temp);
+}
+
+/******************************************************************************************/
+
+// Libère la mémoire allouée par newmat pour le tableau 2D row*col
+void freemat(image *mat) {
+    for (int i=0 ; i<mat->row ; i++) {
+        free(mat->tab[i]);
+    }
+    free(mat->tab);
+}
+
+/******************************************************************************************/
